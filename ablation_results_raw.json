@@ -1,0 +1,127 @@
+{
+  "Raw RF": [
+    {
+      "auprc": 0.9357384802448493,
+      "minority_recall": 0.8648648648648649
+    },
+    {
+      "auprc": 0.9441032030431374,
+      "minority_recall": 0.918918918918919
+    },
+    {
+      "auprc": 0.9504407572261486,
+      "minority_recall": 0.8918918918918919
+    },
+    {
+      "auprc": 0.9730511813611711,
+      "minority_recall": 0.918918918918919
+    },
+    {
+      "auprc": 0.9636007542870612,
+      "minority_recall": 0.8648648648648649
+    }
+  ],
+  "SMOTE+RF": [
+    {
+      "auprc": 0.947729397438158,
+      "minority_recall": 0.8648648648648649
+    },
+    {
+      "auprc": 0.9086319444402473,
+      "minority_recall": 0.8648648648648649
+    },
+    {
+      "auprc": 0.9539714978299201,
+      "minority_recall": 0.8108108108108109
+    },
+    {
+      "auprc": 0.9607195875618169,
+      "minority_recall": 0.918918918918919
+    },
+    {
+      "auprc": 0.9578503827582716,
+      "minority_recall": 0.7837837837837838
+    }
+  ],
+  "UGO (\u03b1=1.0 Epistemic)": [
+    {
+      "auprc": 0.9512003548192822,
+      "minority_recall": 0.8648648648648649,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9366855329593506,
+      "minority_recall": 0.8918918918918919,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9516525357132566,
+      "minority_recall": 0.8378378378378378,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9736907114662493,
+      "minority_recall": 0.8918918918918919,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9612843801185538,
+      "minority_recall": 0.7837837837837838,
+      "alpha_used": 1.0
+    }
+  ],
+  "UGO (\u03b1=0.0 SSL Boundary)": [
+    {
+      "auprc": 0.9472940595582106,
+      "minority_recall": 0.8918918918918919,
+      "alpha_used": 0.0
+    },
+    {
+      "auprc": 0.9321520045040728,
+      "minority_recall": 0.8918918918918919,
+      "alpha_used": 0.0
+    },
+    {
+      "auprc": 0.9473467158388924,
+      "minority_recall": 0.7837837837837838,
+      "alpha_used": 0.0
+    },
+    {
+      "auprc": 0.9837139376588908,
+      "minority_recall": 0.918918918918919,
+      "alpha_used": 0.0
+    },
+    {
+      "auprc": 0.955312966633443,
+      "minority_recall": 0.7567567567567568,
+      "alpha_used": 0.0
+    }
+  ],
+  "SS-UGO (Tuned \u03b1)": [
+    {
+      "auprc": 0.9512003548192822,
+      "minority_recall": 0.8648648648648649,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9345417205284561,
+      "minority_recall": 0.918918918918919,
+      "alpha_used": 0.6000000000000001
+    },
+    {
+      "auprc": 0.9516525357132566,
+      "minority_recall": 0.8378378378378378,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9736907114662493,
+      "minority_recall": 0.8918918918918919,
+      "alpha_used": 1.0
+    },
+    {
+      "auprc": 0.9612843801185538,
+      "minority_recall": 0.7837837837837838,
+      "alpha_used": 1.0
+    }
+  ]
+}
