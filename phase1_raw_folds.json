@@ -1,0 +1,510 @@
+{
+  "Thyroid_Sick": {
+    "Raw RF": [
+      {
+        "auprc": 0.9357384802448493,
+        "minority_recall": 0.8648648648648649
+      },
+      {
+        "auprc": 0.9441032030431374,
+        "minority_recall": 0.918918918918919
+      },
+      {
+        "auprc": 0.9504407572261486,
+        "minority_recall": 0.8918918918918919
+      },
+      {
+        "auprc": 0.9730511813611711,
+        "minority_recall": 0.918918918918919
+      },
+      {
+        "auprc": 0.9636007542870612,
+        "minority_recall": 0.8648648648648649
+      }
+    ],
+    "SMOTE+RF": [
+      {
+        "auprc": 0.947729397438158,
+        "minority_recall": 0.8648648648648649
+      },
+      {
+        "auprc": 0.9086319444402473,
+        "minority_recall": 0.8648648648648649
+      },
+      {
+        "auprc": 0.9539714978299201,
+        "minority_recall": 0.8108108108108109
+      },
+      {
+        "auprc": 0.9607195875618169,
+        "minority_recall": 0.918918918918919
+      },
+      {
+        "auprc": 0.9578503827582716,
+        "minority_recall": 0.7837837837837838
+      }
+    ],
+    "UGO (\u03b1=1.0 Epistemic)": [
+      {
+        "auprc": 0.9512003548192822,
+        "minority_recall": 0.8648648648648649,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9366855329593506,
+        "minority_recall": 0.8918918918918919,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9516525357132566,
+        "minority_recall": 0.8378378378378378,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9736907114662493,
+        "minority_recall": 0.8918918918918919,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9612843801185538,
+        "minority_recall": 0.7837837837837838,
+        "alpha_used": 1.0
+      }
+    ],
+    "UGO (\u03b1=0.0 SSL Boundary)": [
+      {
+        "auprc": 0.9472940595582106,
+        "minority_recall": 0.8918918918918919,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.9321520045040728,
+        "minority_recall": 0.8918918918918919,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.9473467158388924,
+        "minority_recall": 0.7837837837837838,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.9837139376588908,
+        "minority_recall": 0.918918918918919,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.955312966633443,
+        "minority_recall": 0.7567567567567568,
+        "alpha_used": 0.0
+      }
+    ],
+    "SS-UGO (Tuned \u03b1)": [
+      {
+        "auprc": 0.9512003548192822,
+        "minority_recall": 0.8648648648648649,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9345417205284561,
+        "minority_recall": 0.918918918918919,
+        "alpha_used": 0.6000000000000001
+      },
+      {
+        "auprc": 0.9516525357132566,
+        "minority_recall": 0.8378378378378378,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9736907114662493,
+        "minority_recall": 0.8918918918918919,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.9612843801185538,
+        "minority_recall": 0.7837837837837838,
+        "alpha_used": 1.0
+      }
+    ]
+  },
+  "Pima_Diabetes": {
+    "Raw RF": [
+      {
+        "auprc": 0.7007510249127606,
+        "minority_recall": 0.627906976744186
+      },
+      {
+        "auprc": 0.655848815815663,
+        "minority_recall": 0.6511627906976745
+      },
+      {
+        "auprc": 0.7733285983600688,
+        "minority_recall": 0.6511627906976745
+      },
+      {
+        "auprc": 0.6532195719939904,
+        "minority_recall": 0.6976744186046512
+      },
+      {
+        "auprc": 0.7002983253429211,
+        "minority_recall": 0.7142857142857143
+      }
+    ],
+    "SMOTE+RF": [
+      {
+        "auprc": 0.6953437172675511,
+        "minority_recall": 0.6511627906976745
+      },
+      {
+        "auprc": 0.6900210989005233,
+        "minority_recall": 0.6744186046511628
+      },
+      {
+        "auprc": 0.7332610767359349,
+        "minority_recall": 0.6744186046511628
+      },
+      {
+        "auprc": 0.6695747395696894,
+        "minority_recall": 0.6744186046511628
+      },
+      {
+        "auprc": 0.6703494035318154,
+        "minority_recall": 0.6428571428571429
+      }
+    ],
+    "UGO (\u03b1=1.0 Epistemic)": [
+      {
+        "auprc": 0.7472240828370973,
+        "minority_recall": 0.5813953488372093,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6564382487144576,
+        "minority_recall": 0.5581395348837209,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.7698836525237115,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.668956945582341,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.710471922120526,
+        "minority_recall": 0.6428571428571429,
+        "alpha_used": 1.0
+      }
+    ],
+    "UGO (\u03b1=0.0 SSL Boundary)": [
+      {
+        "auprc": 0.7200920181534869,
+        "minority_recall": 0.5813953488372093,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6544662355730559,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.7428552620464236,
+        "minority_recall": 0.6744186046511628,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.7070691039336512,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6970654172333014,
+        "minority_recall": 0.6190476190476191,
+        "alpha_used": 0.0
+      }
+    ],
+    "SS-UGO (Tuned \u03b1)": [
+      {
+        "auprc": 0.7472240828370973,
+        "minority_recall": 0.5813953488372093,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6564382487144576,
+        "minority_recall": 0.5581395348837209,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.7698836525237115,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.7070691039336512,
+        "minority_recall": 0.6046511627906976,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6881436232510941,
+        "minority_recall": 0.6190476190476191,
+        "alpha_used": 0.2
+      }
+    ]
+  },
+  "Credit_G": {
+    "Raw RF": [
+      {
+        "auprc": 0.6914400033535214,
+        "minority_recall": 0.625
+      },
+      {
+        "auprc": 0.6075872528499169,
+        "minority_recall": 0.5625
+      },
+      {
+        "auprc": 0.5826463383505186,
+        "minority_recall": 0.5416666666666666
+      },
+      {
+        "auprc": 0.48045582554300564,
+        "minority_recall": 0.4583333333333333
+      },
+      {
+        "auprc": 0.709820735417052,
+        "minority_recall": 0.7291666666666666
+      }
+    ],
+    "SMOTE+RF": [
+      {
+        "auprc": 0.663422624055737,
+        "minority_recall": 0.5
+      },
+      {
+        "auprc": 0.5561978497154977,
+        "minority_recall": 0.4583333333333333
+      },
+      {
+        "auprc": 0.6067823629629647,
+        "minority_recall": 0.4791666666666667
+      },
+      {
+        "auprc": 0.4855264245230417,
+        "minority_recall": 0.3333333333333333
+      },
+      {
+        "auprc": 0.6570188305416438,
+        "minority_recall": 0.5
+      }
+    ],
+    "UGO (\u03b1=1.0 Epistemic)": [
+      {
+        "auprc": 0.7002522252488883,
+        "minority_recall": 0.375,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.5709385383039315,
+        "minority_recall": 0.375,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.5599083325173027,
+        "minority_recall": 0.4583333333333333,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.5246703702275184,
+        "minority_recall": 0.3958333333333333,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6513505226397777,
+        "minority_recall": 0.4583333333333333,
+        "alpha_used": 1.0
+      }
+    ],
+    "UGO (\u03b1=0.0 SSL Boundary)": [
+      {
+        "auprc": 0.6705443019663284,
+        "minority_recall": 0.3125,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.5675654768363398,
+        "minority_recall": 0.3125,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.5402566096193662,
+        "minority_recall": 0.4166666666666667,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.4855101253226591,
+        "minority_recall": 0.2708333333333333,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6526624675216115,
+        "minority_recall": 0.3958333333333333,
+        "alpha_used": 0.0
+      }
+    ],
+    "SS-UGO (Tuned \u03b1)": [
+      {
+        "auprc": 0.7002522252488883,
+        "minority_recall": 0.375,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.57317068824401,
+        "minority_recall": 0.375,
+        "alpha_used": 0.4
+      },
+      {
+        "auprc": 0.5528847867616987,
+        "minority_recall": 0.4166666666666667,
+        "alpha_used": 0.8
+      },
+      {
+        "auprc": 0.4914578802301303,
+        "minority_recall": 0.3333333333333333,
+        "alpha_used": 0.2
+      },
+      {
+        "auprc": 0.6946160633919478,
+        "minority_recall": 0.4791666666666667,
+        "alpha_used": 0.4
+      }
+    ]
+  },
+  "Mammography": {
+    "Raw RF": [
+      {
+        "auprc": 0.6901680334891662,
+        "minority_recall": 0.6904761904761905
+      },
+      {
+        "auprc": 0.6999827445839961,
+        "minority_recall": 0.6341463414634146
+      },
+      {
+        "auprc": 0.754177678072203,
+        "minority_recall": 0.6829268292682927
+      },
+      {
+        "auprc": 0.6526753375892069,
+        "minority_recall": 0.5476190476190477
+      },
+      {
+        "auprc": 0.6870599514195647,
+        "minority_recall": 0.5476190476190477
+      }
+    ],
+    "SMOTE+RF": [
+      {
+        "auprc": 0.6470657256856717,
+        "minority_recall": 0.8095238095238095
+      },
+      {
+        "auprc": 0.7158861123997415,
+        "minority_recall": 0.6585365853658537
+      },
+      {
+        "auprc": 0.7602667242809555,
+        "minority_recall": 0.7804878048780488
+      },
+      {
+        "auprc": 0.6800845154890578,
+        "minority_recall": 0.6428571428571429
+      },
+      {
+        "auprc": 0.6828084354520307,
+        "minority_recall": 0.7380952380952381
+      }
+    ],
+    "UGO (\u03b1=1.0 Epistemic)": [
+      {
+        "auprc": 0.6044569682950637,
+        "minority_recall": 0.7619047619047619,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6634192925480581,
+        "minority_recall": 0.5365853658536586,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.7160560956697406,
+        "minority_recall": 0.7317073170731707,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.5975336553521464,
+        "minority_recall": 0.5714285714285714,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6813843733662578,
+        "minority_recall": 0.5952380952380952,
+        "alpha_used": 1.0
+      }
+    ],
+    "UGO (\u03b1=0.0 SSL Boundary)": [
+      {
+        "auprc": 0.5723334867751522,
+        "minority_recall": 0.6904761904761905,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6152132036997318,
+        "minority_recall": 0.5365853658536586,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.7131331715871572,
+        "minority_recall": 0.6585365853658537,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.5953315722874558,
+        "minority_recall": 0.5238095238095238,
+        "alpha_used": 0.0
+      },
+      {
+        "auprc": 0.6717635679607667,
+        "minority_recall": 0.5714285714285714,
+        "alpha_used": 0.0
+      }
+    ],
+    "SS-UGO (Tuned \u03b1)": [
+      {
+        "auprc": 0.6044569682950637,
+        "minority_recall": 0.7619047619047619,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.6634192925480581,
+        "minority_recall": 0.5365853658536586,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.7022814842932569,
+        "minority_recall": 0.6829268292682927,
+        "alpha_used": 0.6000000000000001
+      },
+      {
+        "auprc": 0.5975336553521464,
+        "minority_recall": 0.5714285714285714,
+        "alpha_used": 1.0
+      },
+      {
+        "auprc": 0.69494775622721,
+        "minority_recall": 0.5952380952380952,
+        "alpha_used": 0.6000000000000001
+      }
+    ]
+  }
+}
