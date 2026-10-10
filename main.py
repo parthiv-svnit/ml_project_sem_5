@@ -1,39 +1,36 @@
 """
 main.py — UGO Project Entry Point
 ===================================
-Phase 2: Data Loading, Cleaning, Preprocessing
-Phase 3: Baseline Cross-Validation  (Raw RF | SMOTE+RF)
-Phase 4: UGO Pipeline Integration   (run_ugo_pipeline)
-Phase 5: Ablation Study CV          (5 configurations, 5-fold StratifiedKFold)
+Phase 1 (expanded): Multi-Dataset Evaluation
+  Loops over 4 OpenML datasets, runs the full 5-config ablation on each,
+  and consolidates all fold-level results into one CSV for Phase 3 stats.
 
-    Config 1 — Raw RF              : no oversampling (class_weight="balanced")
-    Config 2 — SMOTE+RF            : standard SMOTE baseline
-    Config 3 — UGO α=1.0           : pure epistemic uncertainty, no SSL term
-    Config 4 — UGO α=0.0           : pure SSL boundary score, no epistemic term
-    Config 5 — SS-UGO (tuned α)    : full pipeline, alpha found by inner CV
+Phase 5 (retained): Ablation Study logic is reused per dataset.
 
-Dataset : Thyroid (Sick) — OpenML ID 38
-Project : Uncertainty-Guided Boundary Resampling for Financial Fraud Detection
+Datasets:
+  38  — Thyroid (Sick)        ~3772 rows,  ~6% minority
+  37  — Pima Diabetes         ~768  rows, ~35% minority  (near-balance stress test)
+  31  — Credit-G (German)     ~1000 rows, ~30% minority  (categorical-heavy)
+  310 — Mammography           ~11183 rows, ~2.3% minority (extreme imbalance)
 
-Dependencies (install once):
-    pip install scikit-learn imbalanced-learn pandas numpy hdbscan
+Dependencies:
+    pip install scikit-learn imbalanced-learn pandas numpy
 """
 
-# ── Standard Library ──────────────────────────────────────────────────────────
+import json
 import sys
 import warnings
-warnings.filterwarnings("ignore")   # suppress sklearn/imblearn convergence noise
+warnings.filterwarnings("ignore")
 
-# ── Third-Party ───────────────────────────────────────────────────────────────
 import numpy as np
 import pandas as pd
 
-from sklearn.datasets      import fetch_openml
-from sklearn.ensemble      import RandomForestClassifier
-from sklearn.impute        import SimpleImputer
-from sklearn.metrics       import average_precision_score, recall_score
+from sklearn.datasets        import fetch_openml
+from sklearn.ensemble        import RandomForestClassifier
+from sklearn.impute          import SimpleImputer
+from sklearn.metrics         import average_precision_score, recall_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.preprocessing import LabelEncoder, OrdinalEncoder, StandardScaler
+from sklearn.preprocessing   import OrdinalEncoder, StandardScaler
 
 try:
     from imblearn.over_sampling import SMOTE
@@ -41,43 +38,70 @@ try:
     IMBLEARN_AVAILABLE = True
 except ImportError:
     IMBLEARN_AVAILABLE = False
-    print(
-        "[WARNING] imbalanced-learn not found.\n"
-        "  Install with:  pip install imbalanced-learn\n"
-        "  SMOTE baseline will be skipped.\n"
-    )
+    print("[WARNING] imbalanced-learn not found. SMOTE baseline will be NaN.\n"
+          "  Install: pip install imbalanced-learn\n")
 
-# ── Local ─────────────────────────────────────────────────────────────────────
 from ugo_pipeline import run_ugo_pipeline
 
 
 # =============================================================================
-# CONFIGURATION
+# DATASET REGISTRY
 # =============================================================================
+# Each entry fully describes one dataset so all preprocessing is driven by
+# this table — no dataset-specific code lives in the pipeline functions.
+#
+# Fields:
+#   openml_id         : int   — OpenML dataset numeric ID
+#   name              : str   — human-readable label used in CSVs and logs
+#   minority_label    : str   — the target class value treated as positive (1)
+#                               Set to None to use the *least frequent* class
+#                               automatically (safe default for all 4 datasets).
+#   missing_threshold : float — drop feature columns with > this fraction missing
 
-OPENML_DATA_ID          = 38        # Thyroid (Sick) dataset
-MISSING_DROP_THRESHOLD  = 0.30      # drop columns with >30% missing values
-UNLABELED_FRACTION      = 0.20      # 20% of data → X_unlabeled (labels stripped)
-N_CV_FOLDS              = 5         # stratified folds for CV loop
-RANDOM_STATE            = 42
-RF_N_ESTIMATORS         = 100
-MINORITY_LABEL          = "sick"    # positive class label in the thyroid dataset
-
-# Metrics tracked per fold for every configuration
-METRIC_KEYS = ["auprc", "minority_recall"]
-
-# Ablation configurations (Phase 5).
-# Each entry drives one run of run_ugo_pipeline() per fold.
-# "label"          → display name in the summary table and CSV
-# "tune_alpha_flag"→ True = inner CV finds best alpha; False = use fixed alpha
-# "alpha"          → only used when tune_alpha_flag=False
-ABLATION_CONFIGS = [
-    {"label": "UGO (α=1.0 Epistemic)", "tune_alpha_flag": False, "alpha": 1.0},
-    {"label": "UGO (α=0.0 SSL Boundary)", "tune_alpha_flag": False, "alpha": 0.0},
-    {"label": "SS-UGO (Tuned α)",        "tune_alpha_flag": True,  "alpha": None},
+DATASET_REGISTRY = [
+    {
+        "openml_id":         38,
+        "name":              "Thyroid_Sick",
+        "minority_label":    "sick",
+        "missing_threshold": 0.30,
+    },
+    {
+        "openml_id":         37,
+        "name":              "Pima_Diabetes",
+        "minority_label":    "tested_positive",
+        "missing_threshold": 0.30,
+    },
+    {
+        "openml_id":         31,
+        "name":              "Credit_G",
+        "minority_label":    "bad",       # bad credit = minority positive class
+        "missing_threshold": 0.30,
+    },
+    {
+        "openml_id":         310,
+        "name":              "Mammography",
+        "minority_label":    None,        # auto-detect least frequent class
+        "missing_threshold": 0.30,
+    },
 ]
 
-# Display order for the final comparative table (matches ablation narrative)
+
+# =============================================================================
+# GLOBAL CONFIGURATION
+# =============================================================================
+
+UNLABELED_FRACTION = 0.20    # fraction of each dataset stripped as unlabeled pool
+N_CV_FOLDS         = 5
+RANDOM_STATE       = 42
+RF_N_ESTIMATORS    = 100
+METRIC_KEYS        = ["auprc", "minority_recall"]
+
+ABLATION_CONFIGS = [
+    {"label": "UGO (α=1.0 Epistemic)",    "tune_alpha_flag": False, "alpha": 1.0},
+    {"label": "UGO (α=0.0 SSL Boundary)", "tune_alpha_flag": False, "alpha": 0.0},
+    {"label": "SS-UGO (Tuned α)",         "tune_alpha_flag": True,  "alpha": None},
+]
+
 METHOD_ORDER = [
     "Raw RF",
     "SMOTE+RF",
@@ -88,117 +112,101 @@ METHOD_ORDER = [
 
 
 # =============================================================================
-# PHASE 2 — DATA LOADING, CLEANING, PREPROCESSING
+# PREPROCESSING  (dataset-agnostic)
 # =============================================================================
 
-def load_and_clean(data_id: int, missing_threshold: float) -> pd.DataFrame:
+def load_and_clean(
+    openml_id: int,
+    dataset_name: str,
+    minority_label: str | None,
+    missing_threshold: float,
+) -> tuple[pd.DataFrame, str]:
     """
-    Fetch dataset from OpenML and apply cleaning rules.
+    Fetch one OpenML dataset and return a fully numeric DataFrame + the
+    minority label string that was actually used.
 
-    Cleaning steps:
-      1. Fetch raw frame.
-      2. Attach target as a column so it survives all column-level operations.
-      3. Drop features (not target) with > missing_threshold missing values.
-      4. Separate numerical and categorical features for appropriate imputation.
-      5. Median-impute numerical features.
-      6. Mode-impute categorical features.
-      7. Ordinal-encode categorical features (integer codes, unknown → -1).
-         OrdinalEncoder is chosen over OneHotEncoder because:
-           - RF handles ordinal codes well without dimensionality explosion.
-           - SMOTE operates on a single numeric matrix; OHE inflates distances.
-      8. Return a single cleaned DataFrame (features + target column "target").
-
-    Parameters
-    ----------
-    data_id           : OpenML dataset ID.
-    missing_threshold : columns with fraction missing > this value are dropped.
+    Steps
+    -----
+    1. Fetch via fetch_openml (as_frame=True so dtypes are preserved).
+    2. Drop feature columns whose fraction of NaN > missing_threshold.
+       Target column is never dropped.
+    3. Impute: median for numerical columns, mode for categorical columns.
+       Imputers are fit on the full cleaned frame here; inside the CV loop
+       they are re-fit on fold-train only (see run_ablation_cv).
+    4. OrdinalEncoder for categorical features (unknown → -1).
+    5. Binarise target:
+         minority_label  → 1
+         everything else → 0
+       If minority_label is None, the least-frequent class is chosen
+       automatically and its string value is returned for logging.
 
     Returns
     -------
-    df_clean : pd.DataFrame with all-numeric features and a "target" column.
+    df_clean       : pd.DataFrame  all-numeric features + "target" column
+    minority_used  : str           the label that was mapped to 1
     """
     print(f"\n{'='*60}")
-    print(f"PHASE 2 — DATA LOADING & CLEANING")
+    print(f"  Loading: {dataset_name}  (OpenML ID={openml_id})")
     print(f"{'='*60}")
 
-    # ── 2.1 Fetch ─────────────────────────────────────────────────────────────
-    print(f"\n[2.1] Fetching OpenML dataset ID={data_id} ...")
-    bunch = fetch_openml(data_id=data_id, as_frame=True, parser="auto")
-    X_raw: pd.DataFrame = bunch.data.copy()
-    y_raw: pd.Series    = bunch.target.copy().rename("target")
+    bunch  = fetch_openml(data_id=openml_id, as_frame=True, parser="auto")
+    X_raw  = bunch.data.copy()
+    y_raw  = bunch.target.copy()
 
-    print(f"      Raw shape : {X_raw.shape}")
-    print(f"      Target    : '{y_raw.name}', classes = {sorted(y_raw.unique())}")
-    print(f"      Class dist:\n{y_raw.value_counts().to_string()}")
+    print(f"  Raw shape   : {X_raw.shape}")
+    print(f"  Target dist :\n{y_raw.value_counts().to_string()}")
 
-    # ── 2.2 Drop high-missingness columns ─────────────────────────────────────
-    col_missing_frac = X_raw.isnull().mean()
-    cols_to_drop     = col_missing_frac[col_missing_frac > missing_threshold].index.tolist()
+    # ── Drop high-missingness feature columns ─────────────────────────────────
+    miss_frac    = X_raw.isnull().mean()
+    cols_to_drop = miss_frac[miss_frac > missing_threshold].index.tolist()
     X_raw.drop(columns=cols_to_drop, inplace=True)
+    if cols_to_drop:
+        print(f"  Dropped {len(cols_to_drop)} col(s) >{missing_threshold*100:.0f}% missing: {cols_to_drop}")
 
-    print(f"\n[2.2] Dropped {len(cols_to_drop)} column(s) with >{missing_threshold*100:.0f}% missing:")
-    print(f"      {cols_to_drop if cols_to_drop else 'none'}")
-    print(f"      Shape after drop: {X_raw.shape}")
-
-    # ── 2.3 Identify column types ─────────────────────────────────────────────
-    # Treat object/category dtype as categorical; everything else as numerical.
+    # ── Column type identification ────────────────────────────────────────────
     cat_cols = X_raw.select_dtypes(include=["object", "category"]).columns.tolist()
     num_cols = X_raw.select_dtypes(exclude=["object", "category"]).columns.tolist()
+    print(f"  Numerical cols: {len(num_cols)}   Categorical cols: {len(cat_cols)}")
 
-    print(f"\n[2.3] Feature types — numerical: {len(num_cols)}, categorical: {len(cat_cols)}")
-    if cat_cols:
-        print(f"      Categorical cols: {cat_cols}")
-
-    # ── 2.4 Median imputation — numerical ─────────────────────────────────────
+    # ── Imputation ────────────────────────────────────────────────────────────
     if num_cols:
-        num_imputer = SimpleImputer(strategy="median")
-        X_raw[num_cols] = num_imputer.fit_transform(X_raw[num_cols])
-
-    # ── 2.5 Mode imputation + OrdinalEncoder — categorical ────────────────────
+        X_raw[num_cols] = SimpleImputer(strategy="median").fit_transform(X_raw[num_cols])
     if cat_cols:
-        mode_imputer = SimpleImputer(strategy="most_frequent")
-        X_raw[cat_cols] = mode_imputer.fit_transform(X_raw[cat_cols])
-
-        # OrdinalEncoder: unseen categories at transform time → -1
+        X_raw[cat_cols] = SimpleImputer(strategy="most_frequent").fit_transform(X_raw[cat_cols])
         enc = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)
         X_raw[cat_cols] = enc.fit_transform(X_raw[cat_cols])
 
-    # ── 2.6 Encode binary target → 0 / 1 ─────────────────────────────────────
-    # "sick" → 1 (minority/positive), "negative" → 0 (majority)
-    y_binary = (y_raw == MINORITY_LABEL).astype(int)
-
-    # Sanity-check: all numerics
     assert X_raw.select_dtypes(exclude="number").empty, \
-        "Non-numeric columns remain after encoding — check cat_cols logic."
+        "Non-numeric columns remain after encoding."
 
-    df_clean = X_raw.copy()
+    # ── Target binarisation ───────────────────────────────────────────────────
+    y_str = y_raw.astype(str)
+    if minority_label is None:
+        # Auto-detect: least frequent class
+        minority_label = y_str.value_counts().index[-1]
+        print(f"  Auto-detected minority label: '{minority_label}'")
+
+    y_binary = (y_str == str(minority_label)).astype(int)
+    ir = (y_binary == 0).sum() / max(y_binary.sum(), 1)
+    print(f"  Minority (1): {y_binary.sum()}  Majority (0): {(y_binary==0).sum()}"
+          f"  IR≈{ir:.1f}:1")
+
+    df_clean           = X_raw.copy()
     df_clean["target"] = y_binary.values
-
-    print(f"\n[2.4-2.6] Imputation + encoding complete.")
-    print(f"          Final shape  : {df_clean.shape}")
-    print(f"          Minority (1) : {y_binary.sum()} ({y_binary.mean()*100:.2f}%)")
-    print(f"          Majority (0) : {(y_binary == 0).sum()} ({(y_binary == 0).mean()*100:.2f}%)")
-
-    return df_clean
+    return df_clean, str(minority_label)
 
 
-def split_labeled_unlabeled(
+def split_and_scale(
     df_clean: pd.DataFrame,
     unlabeled_fraction: float,
     random_state: int,
-) -> tuple:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, StandardScaler]:
     """
-    Simulate a semi-supervised setting by stripping labels from a fraction
-    of the data to create the unlabeled pool.
+    Stratified labeled/unlabeled split → global StandardScaler fit on labeled.
 
-    Stratification is used so the minority-class ratio is preserved in
-    both the labeled and unlabeled splits.
-
-    Returns
-    -------
-    X_labeled   : np.ndarray, shape (n_labeled,   n_features)
-    y_labeled   : np.ndarray, shape (n_labeled,)
-    X_unlabeled : np.ndarray, shape (n_unlabeled, n_features)  — NO labels used
+    Returns X_labeled_s, y_labeled, X_unlabeled_s, global_scaler.
+    The global scaler is stored for diagnostics; the CV loop re-fits its own
+    per-fold scaler on fold-train only.
     """
     X = df_clean.drop(columns="target").values.astype(np.float64)
     y = df_clean["target"].values.astype(int)
@@ -209,109 +217,40 @@ def split_labeled_unlabeled(
         stratify=y,
         random_state=random_state,
     )
+    scaler   = StandardScaler()
+    X_lab_s  = scaler.fit_transform(X_lab)
+    X_unl_s  = scaler.transform(X_unl)
 
-    print(f"\n[2.7] Labeled / Unlabeled split (stratified):")
-    print(f"      X_labeled   : {X_lab.shape}  —  "
-          f"{y_lab.sum()} minority / {(y_lab==0).sum()} majority")
-    print(f"      X_unlabeled : {X_unl.shape}  —  labels STRIPPED (SSL pool)")
-
-    return X_lab, y_lab, X_unl
-
-
-def scale_features(
-    X_labeled: np.ndarray,
-    X_unlabeled: np.ndarray,
-) -> tuple:
-    """
-    Fit StandardScaler on labeled data only, then transform both splits.
-
-    LEAKAGE NOTE: the scaler is fit only on X_labeled. X_unlabeled is
-    transformed with the same scaler — it has no labels to leak, but
-    fitting on it would shift the mean/std toward the unlabeled distribution,
-    which is wrong. Inside the CV loop, a NEW scaler must be fit on the
-    fold-train split (see Phase 3 loop).
-    """
-    scaler = StandardScaler()
-    X_labeled_scaled   = scaler.fit_transform(X_labeled)
-    X_unlabeled_scaled = scaler.transform(X_unlabeled)
-
-    print(f"\n[2.8] StandardScaler fit on X_labeled, applied to both splits.")
-    print(f"      X_labeled mean ≈ 0: {np.abs(X_labeled_scaled.mean(axis=0)).max():.2e}")
-
-    return X_labeled_scaled, X_unlabeled_scaled, scaler
+    print(f"  Labeled   : {X_lab_s.shape}  minority={int(y_lab.sum())}")
+    print(f"  Unlabeled : {X_unl_s.shape}  (labels stripped)")
+    return X_lab_s, y_lab, X_unl_s, scaler
 
 
 # =============================================================================
-# HELPERS — METRICS
+# EVALUATION HELPERS
 # =============================================================================
 
-def evaluate(
-    clf,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
-) -> dict:
-    """
-    Compute AUPRC and minority-class recall for a fitted classifier.
-
-    AUPRC is the primary metric for imbalanced classification:
-    it captures precision-recall trade-off across all thresholds and is
-    not inflated by the large number of true negatives (unlike AUROC).
-
-    Minority recall is tracked separately because a classifier that never
-    predicts "sick" can achieve high AUPRC if its probability scores are
-    reasonable — recall catches complete misses.
-    """
+def evaluate(clf, X_val: np.ndarray, y_val: np.ndarray) -> dict:
     y_prob = clf.predict_proba(X_val)[:, 1]
     y_pred = clf.predict(X_val)
     return {
-        "auprc":          average_precision_score(y_val, y_prob),
-        "minority_recall": recall_score(y_val, y_pred, pos_label=1, zero_division=0),
+        "auprc":           float(average_precision_score(y_val, y_prob)),
+        "minority_recall": float(recall_score(y_val, y_pred, pos_label=1, zero_division=0)),
     }
 
 
-def print_fold_results(method: str, fold: int, metrics: dict) -> None:
-    print(f"    [{method:>15s}] fold {fold+1}:  "
-          f"AUPRC={metrics['auprc']:.4f}  "
-          f"Recall={metrics['minority_recall']:.4f}")
+def _nan_metrics() -> dict:
+    return {k: float("nan") for k in METRIC_KEYS}
 
 
-def summarise_cv(results: dict) -> pd.DataFrame:
-    """
-    Aggregate per-fold metrics into mean ± std and per-fold values.
-
-    Returns two DataFrames:
-      summary_df  — one row per (method, metric): mean, std, and each fold value.
-                    Ordered by METHOD_ORDER so the CSV reads top-to-bottom in the
-                    same order as the ablation narrative in the report.
-      wide_df     — pivot with methods as rows, metrics as columns (mean ± std).
-                    Ready to paste directly into a report table.
-    """
-    rows = []
-    for method, fold_metrics in results.items():
-        for metric in METRIC_KEYS:
-            vals = [fm[metric] for fm in fold_metrics]
-            row  = {
-                "method": method,
-                "metric": metric,
-                "mean":   float(np.nanmean(vals)),
-                "std":    float(np.nanstd(vals)),
-            }
-            for i, v in enumerate(vals):
-                row[f"fold_{i+1}"] = float(v)
-            rows.append(row)
-
-    df = pd.DataFrame(rows)
-
-    # Enforce canonical method order (defined by METHOD_ORDER)
-    order_map = {m: i for i, m in enumerate(METHOD_ORDER)}
-    df["_order"] = df["method"].map(order_map).fillna(len(METHOD_ORDER))
-    df = df.sort_values(["metric", "_order"]).drop(columns="_order").reset_index(drop=True)
-
-    return df
+def print_fold_result(method: str, fold_idx: int, m: dict) -> None:
+    auprc   = f"{m['auprc']:.4f}"   if not np.isnan(m['auprc'])           else "  NaN  "
+    recall  = f"{m['minority_recall']:.4f}" if not np.isnan(m['minority_recall']) else "  NaN  "
+    print(f"    [{method:<26s}] fold {fold_idx+1}: AUPRC={auprc}  Recall={recall}")
 
 
 # =============================================================================
-# PHASE 5 — ABLATION STUDY CV
+# ABLATION CV  (runs once per dataset)
 # =============================================================================
 
 def _run_ugo_config(
@@ -324,285 +263,171 @@ def _run_ugo_config(
     y_fv: np.ndarray,
     X_unl_fold: np.ndarray,
     fold_idx: int,
-    random_state: int,
 ) -> dict:
-    """
-    Run one UGO configuration inside a fold and return its metric dict.
-
-    Wraps run_ugo_pipeline() + downstream RF in a try/except so a single
-    failed fold (e.g. too few minority samples after the fold split) does
-    not abort the entire ablation loop — the fold is recorded as NaN instead.
-
-    Parameters
-    ----------
-    label           : display name for logging (e.g. "UGO (α=1.0 Epistemic)")
-    tune_alpha_flag : passed directly to run_ugo_pipeline
-    alpha           : passed directly to run_ugo_pipeline (ignored if tuning)
-    X_ft / y_ft     : fold-train features and labels (scaled)
-    X_fv / y_fv     : fold-val features and labels (scaled)
-    X_unl_fold      : unlabeled pool, scaled with the fold scaler
-    fold_idx        : 0-based fold index (for logging)
-    random_state    : reproducibility
-
-    Returns
-    -------
-    dict with keys matching METRIC_KEYS; values are float or NaN on failure.
-    """
+    """Wrap one run_ugo_pipeline call; return NaN dict on any failure."""
     try:
-        ugo_result = run_ugo_pipeline(
-            X_labeled               = X_ft,
-            y_labeled               = y_ft,
-            X_unlabeled             = X_unl_fold,
+        result = run_ugo_pipeline(
+            X_labeled                = X_ft,
+            y_labeled                = y_ft,
+            X_unlabeled              = X_unl_fold,
             hdbscan_min_cluster_size = 5,
-            hdbscan_min_samples     = 3,
-            k_neighbors             = 5,
-            k_interp                = 5,
-            tune_alpha_flag         = tune_alpha_flag,
-            alpha                   = alpha,
-            random_state            = random_state,
+            hdbscan_min_samples      = 3,
+            k_neighbors              = 5,
+            k_interp                 = 5,
+            tune_alpha_flag          = tune_alpha_flag,
+            alpha                    = alpha,
+            random_state             = RANDOM_STATE,
         )
-
-        rf_ugo = RandomForestClassifier(
-            n_estimators = RF_N_ESTIMATORS,
-            random_state = random_state,
-            n_jobs       = -1,
+        rf = RandomForestClassifier(
+            n_estimators=RF_N_ESTIMATORS, random_state=RANDOM_STATE, n_jobs=-1
         )
-        rf_ugo.fit(ugo_result["X_augmented"], ugo_result["y_augmented"])
-        metrics = evaluate(rf_ugo, X_fv, y_fv)
-
-        # Record the alpha that was actually used (tuned or fixed) for diagnostics
-        metrics["alpha_used"] = ugo_result["alpha_used"]
-        return metrics
-
+        rf.fit(result["X_augmented"], result["y_augmented"])
+        m = evaluate(rf, X_fv, y_fv)
+        m["alpha_used"] = float(result["alpha_used"])
+        return m
     except Exception as exc:
-        print(f"     [{label}] fold {fold_idx+1} FAILED: {exc}")
-        return {k: float("nan") for k in METRIC_KEYS} | {"alpha_used": float("nan")}
+        print(f"      [{label}] fold {fold_idx+1} FAILED: {exc}")
+        return _nan_metrics() | {"alpha_used": float("nan")}
 
 
 def run_ablation_cv(
     X_labeled: np.ndarray,
     y_labeled: np.ndarray,
     X_unlabeled: np.ndarray,
-    n_folds: int,
-    random_state: int,
-) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    dataset_name: str,
+) -> tuple[pd.DataFrame, dict]:
     """
-    Phase 5 Ablation Study: 5-fold Stratified CV over all 5 configurations.
+    5-fold Stratified CV over all 5 configurations for ONE dataset.
 
-    Configurations
-    ──────────────
-    1. Raw RF              — class_weight="balanced", no oversampling.
-                             Isolates the model's inherent imbalance handling.
-
-    2. SMOTE+RF            — standard SMOTE (k=5) baseline.
-                             Boundary-agnostic oversampling; establishes the
-                             minimum bar that UGO must beat.
-
-    3. UGO α=1.0           — pure epistemic uncertainty; SSL term = 0.
-                             Ablates the contribution of Label Propagation.
-                             If this beats SMOTE, epistemic uncertainty alone
-                             is sufficient for boundary-awareness.
-
-    4. UGO α=0.0           — pure SSL boundary score; epistemic term = 0.
-                             Ablates the RF uncertainty estimator.
-                             If this beats config 3, SSL adds value beyond
-                             what the ensemble variance already captures.
-
-    5. SS-UGO (Tuned α)    — full pipeline with inner CV alpha search.
-                             Expected to outperform configs 3 & 4, validating
-                             that the weighted combination is strictly better
-                             than either component alone.
-
-    Leakage Controls (same as Phase 3, repeated here for completeness)
-    ──────────────────────────────────────────────────────────────────
-    - StandardScaler fitted on fold-train only; applied to fold-val and X_unl.
-    - SMOTE fitted inside the imblearn Pipeline (fold-train only).
-    - run_ugo_pipeline receives fold-train + X_unl; never touches fold-val.
-    - Alpha tuning (config 5) uses an inner CV over fold-train — fold-val
-      is never seen during the alpha search.
-
-    Parameters
-    ----------
-    X_labeled   : globally scaled labeled feature matrix (re-scaled per fold)
-    y_labeled   : labels for X_labeled
-    X_unlabeled : globally scaled SSL pool (re-scaled per fold)
-    n_folds     : number of CV folds (default 5)
-    random_state: reproducibility seed
+    Per-fold leakage controls:
+      - StandardScaler fitted on fold-train; applied to fold-val and X_unl.
+      - SMOTE fitted inside imblearn Pipeline (fold-train only).
+      - run_ugo_pipeline receives fold-train + X_unl only.
+      - Alpha inner-CV operates on fold-train only.
 
     Returns
     -------
-    summary_df  : pd.DataFrame — mean ± std + per-fold values for all configs
-    raw_results : dict         — raw per-fold metric dicts, for custom analysis
-    wide_df     : pd.DataFrame — pivot table (methods × metrics) for report
+    summary_df : DataFrame  rows=(method,metric), cols=mean,std,fold_1..fold_5
+    raw_results: dict       {method: [fold_metric_dict, ...]}
     """
-    print(f"\n{'='*60}")
-    print(f"PHASE 5 — ABLATION STUDY  ({n_folds}-fold Stratified CV)")
-    print(f"{'='*60}")
-    print(f"Configurations: {', '.join(METHOD_ORDER)}")
+    print(f"\n  ── Ablation CV: {dataset_name} ({N_CV_FOLDS} folds) ──")
 
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_state)
-
-    # Storage: { method_label: [ {metric: value, ...}, ... ] }
-    raw_results: dict[str, list[dict]] = {m: [] for m in METHOD_ORDER}
+    skf         = StratifiedKFold(n_splits=N_CV_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    raw_results = {m: [] for m in METHOD_ORDER}
 
     for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X_labeled, y_labeled)):
+        print(f"\n  Fold {fold_idx+1}/{N_CV_FOLDS}"
+              f"  train_min={int(y_labeled[train_idx].sum())}"
+              f"  val_min={int(y_labeled[val_idx].sum())}")
 
-        print(f"\n{'─'*60}")
-        print(f"  Fold {fold_idx + 1} / {n_folds}")
-        print(f"{'─'*60}")
+        X_ft_raw, X_fv_raw = X_labeled[train_idx], X_labeled[val_idx]
+        y_ft,     y_fv     = y_labeled[train_idx],  y_labeled[val_idx]
 
-        # ── Fold splits ───────────────────────────────────────────────────────
-        X_ft_raw = X_labeled[train_idx]
-        X_fv_raw = X_labeled[val_idx]
-        y_ft     = y_labeled[train_idx]
-        y_fv     = y_labeled[val_idx]
-
-        print(f"  Train : {X_ft_raw.shape}  minority={int(y_ft.sum())}")
-        print(f"  Val   : {X_fv_raw.shape}  minority={int(y_fv.sum())}")
-
-        # ── Per-fold leakage-safe scaling ─────────────────────────────────────
-        # The scaler is fitted only on fold-train. X_unlabeled has no labels
-        # to leak but its scale must be consistent with fold-train.
+        # Per-fold scaler: fit on fold-train only
         fold_scaler = StandardScaler()
         X_ft        = fold_scaler.fit_transform(X_ft_raw)
         X_fv        = fold_scaler.transform(X_fv_raw)
         X_unl_fold  = fold_scaler.transform(X_unlabeled)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # CONFIG 1 — Raw RF (no oversampling)
-        # ─────────────────────────────────────────────────────────────────────
+        # Config 1 — Raw RF
         rf_raw = RandomForestClassifier(
-            n_estimators = RF_N_ESTIMATORS,
-            class_weight = "balanced",
-            random_state = random_state,
-            n_jobs       = -1,
+            n_estimators=RF_N_ESTIMATORS, class_weight="balanced",
+            random_state=RANDOM_STATE, n_jobs=-1,
         )
         rf_raw.fit(X_ft, y_ft)
         m_raw = evaluate(rf_raw, X_fv, y_fv)
         raw_results["Raw RF"].append(m_raw)
-        print_fold_results("Raw RF", fold_idx, m_raw)
+        print_fold_result("Raw RF", fold_idx, m_raw)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # CONFIG 2 — SMOTE + RF
-        # ─────────────────────────────────────────────────────────────────────
+        # Config 2 — SMOTE + RF
         if IMBLEARN_AVAILABLE:
-            smote_rf = ImbPipeline(steps=[
-                ("smote", SMOTE(k_neighbors=5, random_state=random_state)),
-                ("rf",    RandomForestClassifier(
-                    n_estimators=RF_N_ESTIMATORS,
-                    random_state=random_state,
-                    n_jobs=-1,
-                )),
-            ])
-            smote_rf.fit(X_ft, y_ft)
-            m_smote = evaluate(smote_rf, X_fv, y_fv)
+            # Guard: SMOTE needs at least k_neighbors+1 minority samples
+            n_min_train = int(y_ft.sum())
+            k_smote     = min(5, max(1, n_min_train - 1))
+            try:
+                pipe = ImbPipeline([
+                    ("smote", SMOTE(k_neighbors=k_smote, random_state=RANDOM_STATE)),
+                    ("rf",    RandomForestClassifier(
+                        n_estimators=RF_N_ESTIMATORS,
+                        random_state=RANDOM_STATE, n_jobs=-1)),
+                ])
+                pipe.fit(X_ft, y_ft)
+                m_smote = evaluate(pipe, X_fv, y_fv)
+            except Exception as e:
+                print(f"      [SMOTE+RF] fold {fold_idx+1} FAILED: {e}")
+                m_smote = _nan_metrics()
         else:
-            m_smote = {k: float("nan") for k in METRIC_KEYS}
-            print(f"     [SMOTE+RF] fold {fold_idx+1}: skipped — imblearn not installed.")
+            m_smote = _nan_metrics()
         raw_results["SMOTE+RF"].append(m_smote)
-        print_fold_results("SMOTE+RF", fold_idx, m_smote)
+        print_fold_result("SMOTE+RF", fold_idx, m_smote)
 
-        # ─────────────────────────────────────────────────────────────────────
-        # CONFIGS 3, 4, 5 — UGO variants (driven by ABLATION_CONFIGS)
-        # ─────────────────────────────────────────────────────────────────────
+        # Configs 3–5 — UGO variants
         for cfg in ABLATION_CONFIGS:
-            m_ugo = _run_ugo_config(
+            m = _run_ugo_config(
                 label           = cfg["label"],
                 tune_alpha_flag = cfg["tune_alpha_flag"],
                 alpha           = cfg["alpha"],
-                X_ft            = X_ft,
-                y_ft            = y_ft,
-                X_fv            = X_fv,
-                y_fv            = y_fv,
-                X_unl_fold      = X_unl_fold,
-                fold_idx        = fold_idx,
-                random_state    = random_state,
+                X_ft=X_ft, y_ft=y_ft, X_fv=X_fv, y_fv=y_fv,
+                X_unl_fold=X_unl_fold,
+                fold_idx=fold_idx,
             )
-            raw_results[cfg["label"]].append(m_ugo)
-            print_fold_results(cfg["label"], fold_idx, m_ugo)
+            raw_results[cfg["label"]].append(m)
+            print_fold_result(cfg["label"], fold_idx, m)
 
-    # ── Aggregate ─────────────────────────────────────────────────────────────
-    summary_df = summarise_cv(raw_results)
-    wide_df    = _make_wide_table(summary_df)
-    return summary_df, raw_results, wide_df
+    summary_df = _summarise(raw_results)
+    return summary_df, raw_results
 
 
-# =============================================================================
-# REPORTING
-# =============================================================================
-
-def _make_wide_table(summary_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pivot summary_df into a report-ready wide table.
-
-    Output shape:
-        rows    — one per method (in METHOD_ORDER)
-        columns — one per metric, formatted as "mean ± std"
-
-    Example:
-        Method                   | AUPRC          | Minority Recall
-        Raw RF                   | 0.7231 ± 0.042 | 0.6100 ± 0.071
-        SMOTE+RF                 | 0.7889 ± 0.031 | 0.7300 ± 0.058
-        UGO (α=1.0 Epistemic)    | 0.8102 ± 0.028 | 0.7650 ± 0.044
-        UGO (α=0.0 SSL Boundary) | 0.8015 ± 0.033 | 0.7500 ± 0.050
-        SS-UGO (Tuned α)         | 0.8341 ± 0.025 | 0.7920 ± 0.038
-    """
-    pivot = {}
-    for metric in METRIC_KEYS:
-        sub = summary_df[summary_df["metric"] == metric].set_index("method")
-        col_label = metric.replace("_", " ").title()
-        pivot[col_label] = sub.apply(
-            lambda r: f"{r['mean']:.4f} ± {r['std']:.4f}", axis=1
-        )
-
-    wide = pd.DataFrame(pivot)
-
-    # Restore canonical method ordering
+def _summarise(raw_results: dict) -> pd.DataFrame:
+    """Aggregate per-fold dicts → tidy DataFrame with mean, std, fold_1..N."""
     order_map = {m: i for i, m in enumerate(METHOD_ORDER)}
-    wide["_order"] = wide.index.map(order_map).fillna(len(METHOD_ORDER))
-    wide = wide.sort_values("_order").drop(columns="_order")
-    wide.index.name = "Method"
-    return wide
+    rows = []
+    for method, fold_list in raw_results.items():
+        for metric in METRIC_KEYS:
+            vals = [fm.get(metric, float("nan")) for fm in fold_list]
+            row  = {
+                "method": method,
+                "metric": metric,
+                "mean":   float(np.nanmean(vals)),
+                "std":    float(np.nanstd(vals)),
+            }
+            for i, v in enumerate(vals):
+                row[f"fold_{i+1}"] = float(v)
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    df["_ord"] = df["method"].map(order_map).fillna(len(METHOD_ORDER))
+    return df.sort_values(["metric", "_ord"]).drop(columns="_ord").reset_index(drop=True)
 
 
-def print_ablation_summary(summary_df: pd.DataFrame, wide_df: pd.DataFrame, n_folds: int) -> None:
-    """Print a two-part summary: per-fold breakdown and final wide table."""
-    print(f"\n{'='*60}")
-    print(f"PHASE 5 RESULTS — Ablation Study ({n_folds}-fold Stratified CV)")
-    print(f"{'='*60}")
+# =============================================================================
+# CONSOLIDATED REPORTING
+# =============================================================================
 
-    # ── Per-metric detailed view ───────────────────────────────────────────────
+def print_dataset_summary(dataset_name: str, summary_df: pd.DataFrame) -> None:
+    print(f"\n  Results — {dataset_name}")
     for metric in METRIC_KEYS:
-        sub = summary_df[summary_df["metric"] == metric].copy()
-        fold_cols = [c for c in sub.columns if c.startswith("fold_")]
-
-        print(f"\n  Metric: {metric.upper()}")
-        header = f"  {'Method':<26} {'Mean':>8}  {'Std':>8}"
-        for fc in fold_cols:
-            header += f"  {fc:>8}"
-        print(header)
-        print("  " + "─" * (len(header) - 2))
-
+        sub = summary_df[summary_df["metric"] == metric]
+        print(f"\n    {metric.upper():<20} {'Mean':>8}  {'Std':>8}")
+        print(f"    {'-'*38}")
         for _, row in sub.iterrows():
-            line = f"  {row['method']:<26} {row['mean']:>8.4f}  {row['std']:>8.4f}"
-            for fc in fold_cols:
-                v = row[fc]
-                line += f"  {v:>8.4f}" if not np.isnan(v) else f"  {'NaN':>8}"
-            print(line)
+            print(f"    {row['method']:<20} {row['mean']:>8.4f}  {row['std']:>8.4f}")
 
-    # ── Wide comparative table ─────────────────────────────────────────────────
-    print(f"\n  {'─'*60}")
-    print(f"  Comparative Table (mean ± std) — paste directly into report")
-    print(f"  {'─'*60}")
-    print(f"\n{wide_df.to_string()}\n")
 
-    # ── Ablation interpretation guide ─────────────────────────────────────────
-    print("  Interpretation guide:")
-    print("    Config 3 vs Config 2  → Does epistemic uncertainty beat SMOTE?")
-    print("    Config 4 vs Config 3  → Does SSL boundary geometry add value?")
-    print("    Config 5 vs Config 3  → Does tuning α improve over fixed α=1.0?")
-    print("    Config 5 vs Config 4  → Does tuning α improve over fixed α=0.0?")
-    print("    Config 5 vs Config 2  → Does full SS-UGO beat SMOTE?")
+def build_consolidated_csv(
+    all_summaries: dict[str, pd.DataFrame],
+) -> pd.DataFrame:
+    """
+    Combine per-dataset summary DataFrames into one consolidated CSV.
+
+    Output columns: dataset, method, metric, mean, std, fold_1 … fold_N
+    This is the file you load directly into Phase 3 statistical tests.
+    """
+    frames = []
+    for dataset_name, df in all_summaries.items():
+        df_copy = df.copy()
+        df_copy.insert(0, "dataset", dataset_name)
+        frames.append(df_copy)
+    return pd.concat(frames, ignore_index=True)
 
 
 # =============================================================================
@@ -611,59 +436,82 @@ def print_ablation_summary(summary_df: pd.DataFrame, wide_df: pd.DataFrame, n_fo
 
 def main() -> None:
     print("\n" + "█"*60)
-    print("  UGO PROJECT — main.py")
-    print("  Uncertainty-Guided Oversampling for Imbalanced Classification")
-    print("  Phase 5: Ablation Study")
+    print("  SS-UGO — Phase 1: Multi-Dataset Evaluation")
+    print("  5-config ablation across 4 OpenML datasets")
     print("█"*60)
 
-    # ── Phase 2: Preprocessing ────────────────────────────────────────────────
-    df_clean = load_and_clean(
-        data_id          = OPENML_DATA_ID,
-        missing_threshold = MISSING_DROP_THRESHOLD,
-    )
+    all_summaries  = {}   # { dataset_name: summary_df }
+    all_raw        = {}   # { dataset_name: raw_results dict }
 
-    X_labeled, y_labeled, X_unlabeled = split_labeled_unlabeled(
-        df_clean,
-        unlabeled_fraction = UNLABELED_FRACTION,
-        random_state       = RANDOM_STATE,
-    )
+    for ds in DATASET_REGISTRY:
+        ds_name = ds["name"]
+        print(f"\n\n{'█'*60}")
+        print(f"  DATASET: {ds_name}  (ID={ds['openml_id']})")
+        print(f"{'█'*60}")
 
-    # Global scaling for inspection/diagnostics.
-    # The CV loop re-scales per fold — this output is NOT passed into ablation CV.
-    X_labeled_scaled, X_unlabeled_scaled, _ = scale_features(X_labeled, X_unlabeled)
+        # ── Load & clean ──────────────────────────────────────────────────────
+        df_clean, min_label_used = load_and_clean(
+            openml_id         = ds["openml_id"],
+            dataset_name      = ds_name,
+            minority_label    = ds["minority_label"],
+            missing_threshold = ds["missing_threshold"],
+        )
 
-    # ── Phase 5: Ablation CV ──────────────────────────────────────────────────
-    summary_df, raw_results, wide_df = run_ablation_cv(
-        X_labeled   = X_labeled_scaled,
-        y_labeled   = y_labeled,
-        X_unlabeled = X_unlabeled_scaled,
-        n_folds     = N_CV_FOLDS,
-        random_state = RANDOM_STATE,
-    )
+        # ── Split & scale ─────────────────────────────────────────────────────
+        X_lab_s, y_lab, X_unl_s, _ = split_and_scale(
+            df_clean,
+            unlabeled_fraction = UNLABELED_FRACTION,
+            random_state       = RANDOM_STATE,
+        )
 
-    print_ablation_summary(summary_df, wide_df, N_CV_FOLDS)
+        # ── Ablation CV ───────────────────────────────────────────────────────
+        summary_df, raw_results = run_ablation_cv(
+            X_labeled    = X_lab_s,
+            y_labeled    = y_lab,
+            X_unlabeled  = X_unl_s,
+            dataset_name = ds_name,
+        )
 
-    # ── Export ────────────────────────────────────────────────────────────────
-    # Full tidy table (per-fold values included) — for statistical analysis
-    summary_df.to_csv("ablation_results_tidy.csv", index=False)
-    print(f"[Output] Tidy results saved    → ablation_results_tidy.csv")
+        all_summaries[ds_name] = summary_df
+        all_raw[ds_name]       = raw_results
 
-    # Wide table (mean ± std) — paste directly into final report
-    wide_df.to_csv("ablation_results_report.csv")
-    print(f"[Output] Report table saved    → ablation_results_report.csv")
+        print_dataset_summary(ds_name, summary_df)
 
-    # Raw per-fold dicts — for custom post-hoc analysis or plotting
-    import json
-    serialisable = {
-        method: [
-            {k: (float(v) if not isinstance(v, str) else v) for k, v in fm.items()}
-            for fm in folds
-        ]
-        for method, folds in raw_results.items()
-    }
-    with open("ablation_results_raw.json", "w") as f:
+        # Per-dataset CSV (tidy, with fold-level values)
+        per_ds_path = f"phase1_{ds_name}_results.csv"
+        summary_df.to_csv(per_ds_path, index=False)
+        print(f"\n  [Saved] {per_ds_path}")
+
+    # ── Consolidated output ───────────────────────────────────────────────────
+    consolidated = build_consolidated_csv(all_summaries)
+    consolidated.to_csv("phase1_multidataset_results.csv", index=False)
+    print(f"\n[Saved] phase1_multidataset_results.csv  "
+          f"({len(consolidated)} rows × {len(consolidated.columns)} cols)")
+
+    # Raw fold data as JSON (for alpha convergence plots in Phase 4)
+    serialisable = {}
+    for ds_name, raw in all_raw.items():
+        serialisable[ds_name] = {
+            method: [
+                {k: (float(v) if isinstance(v, (int, float, np.floating)) else str(v))
+                 for k, v in fm.items()}
+                for fm in folds
+            ]
+            for method, folds in raw.items()
+        }
+    with open("phase1_raw_folds.json", "w") as f:
         json.dump(serialisable, f, indent=2)
-    print(f"[Output] Raw fold data saved   → ablation_results_raw.json")
+    print("[Saved] phase1_raw_folds.json")
+
+    # Final cross-dataset summary table
+    print(f"\n{'='*60}")
+    print("  CROSS-DATASET SUMMARY  (SS-UGO vs SMOTE — AUPRC)")
+    print(f"{'='*60}")
+    for ds_name, df in all_summaries.items():
+        sub = df[(df["metric"] == "auprc") & (df["method"].isin(["SMOTE+RF", "SS-UGO (Tuned α)"]))]
+        print(f"\n  {ds_name}")
+        for _, row in sub.iterrows():
+            print(f"    {row['method']:<26} {row['mean']:.4f} ± {row['std']:.4f}")
 
 
 if __name__ == "__main__":
